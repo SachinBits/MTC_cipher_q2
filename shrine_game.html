@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Shinigami Protocol — The Shrine Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: #0a0814;
+      color: #e0d8f0;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+    }
+
+    #ui {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    canvas {
+      display: block;
+      border: 2px solid #3a2060;
+      box-shadow: 0 0 40px rgba(120, 60, 255, 0.3);
+    }
+
+    #hud {
+      position: fixed;
+      top: 12px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 24px;
+      font-size: 14px;
+      color: #a090d0;
+      pointer-events: none;
+    }
+
+    #hud span {
+      background: rgba(10, 8, 20, 0.8);
+      padding: 4px 12px;
+      border: 1px solid #3a2060;
+      border-radius: 4px;
+    }
+
+    /* Game Over screen */
+    #gameover {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(5, 3, 15, 0.92);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    #gameover.show {
+      display: flex;
+    }
+
+    #gameover h1 {
+      font-size: 48px;
+      color: #ff2d55;
+      text-shadow: 0 0 20px #ff2d55;
+      letter-spacing: 4px;
+    }
+
+    #gameover p {
+      color: #a090d0;
+      font-size: 16px;
+      text-align: center;
+      max-width: 500px;
+      line-height: 1.6;
+    }
+
+    #gameover button {
+      background: transparent;
+      border: 1px solid #7040c0;
+      color: #b080f0;
+      padding: 10px 32px;
+      font-family: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      letter-spacing: 2px;
+      transition: all .2s;
+    }
+
+    #gameover button:hover {
+      background: #3a2060;
+      color: #fff;
+    }
+
+    /* Hidden panel (Konami unlock) */
+    #secret-panel {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 5, 0.97);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    #secret-panel.show {
+      display: flex;
+    }
+
+    #secret-panel h2 {
+      color: #00f5ff;
+      font-size: 28px;
+      text-shadow: 0 0 16px #00f5ff;
+      letter-spacing: 3px;
+    }
+
+    #secret-panel .terminal {
+      background: #050510;
+      border: 1px solid #00f5ff;
+      padding: 20px 32px;
+      max-width: 600px;
+      width: 90%;
+      font-size: 13px;
+      color: #00f5ff;
+      line-height: 2;
+    }
+
+    #secret-panel .fragment {
+      color: #ffd700;
+      font-size: 18px;
+      letter-spacing: 2px;
+      margin: 8px 0;
+    }
+
+    #secret-panel .rot-line {
+      color: #bf5fff;
+      font-size: 12px;
+      word-break: break-all;
+    }
+
+    #secret-panel button {
+      margin-top: 8px;
+      background: transparent;
+      border: 1px solid #00f5ff;
+      color: #00f5ff;
+      padding: 8px 24px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+
+    /* Win screen */
+    #winscreen {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 10, 5, 0.96);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    #winscreen.show {
+      display: flex;
+    }
+
+    #winscreen h1 {
+      color: #39ff14;
+      font-size: 36px;
+      text-shadow: 0 0 20px #39ff14;
+    }
+  </style>
+  <!--
+  ============================================================
+  SHINIGAMI PROTOCOL :: SHRINE GAME
+  ============================================================
+  CHALLENGE MASTER NOTES:
+  - Binary in HTML comment below encodes "FRAGMENT3"
+  - Konami Code on game-over screen unlocks secret panel
+  - Secret panel shows FRAGMENT_3 + ROT13-encoded Stage 4 URL
+  - ROT13 of: https://www.youtube.com/watch?v=REPLACE_VIDEO_ID
+    = uggcf://jjj.lbhghor.pbz/jngpu?i=ERCYNPR_IVQRB_VQ
+  ============================================================
+-->
+  <!-- 01000110 01010010 01000001 01000111 01001101 01000101 01001110 01010100 00110011 00111010 00110001 00110100 01001011 00110001 -->
+  <!-- "The gate opens only for those who enter the forbidden sequence." -->
+  <!-- SYSTEM::AKUMA-03::ENCRYPTED_REDIRECT::uggcf://jjj.lbhghor.pbz/jngpu?i=ERCYNPR_IVQRB_VQ -->
+</head>
+
+<body>
+
+  <div id="hud">
+    <span id="hp-display">❤ HP: 100</span>
+    <span id="title-display">SHRINE GAME // 千の魂</span>
+    <span id="score-display">SOULS: 0</span>
+  </div>
+
+  <div id="ui"><canvas id="c" width="800" height="520"></canvas></div>
+
+  <div id="gameover">
+    <h1>魂 GAME OVER 魂</h1>
+    <p>The Shinigami falls...<br>The soul returns to the void.<br><br>
+      <span style="color:#7040c0;font-size:13px;">「Try as you might, the gate remains shut.」</span>
+    </p>
+    <button onclick="restartGame()">▶ TRY AGAIN</button>
+    <p style="font-size:11px;color:#3a2060;margin-top:8px;">— AKUMA-03 TRANSMISSION INTERCEPTED —</p>
+  </div>
+
+  <div id="secret-panel">
+    <h2>⚡ FORBIDDEN GATE UNLOCKED ⚡</h2>
+    <div class="terminal">
+      <div>[ AKUMA-03 SYSTEM BREACH DETECTED ]</div>
+      <div>[ AUTHENTICATION: <span style="color:#39ff14">KONAMI_SEQUENCE_ACCEPTED</span> ]</div>
+      <div>[ DECRYPTING FRAGMENT... ]</div>
+      <div>&nbsp;</div>
+      <div>FRAGMENT RECOVERED:</div>
+      <div class="fragment">▶ FRAGMENT_3: 14K1_ ◀</div>
+      <div>&nbsp;</div>
+      <div>[ NEXT STAGE COORDINATES — ROT13 ENCODED ]</div>
+      <div class="rot-line">uggcf://jjj.lbhghor.pbz/jngpu?i=ERCYNPR_IVQRB_VQ</div>
+      <div>&nbsp;</div>
+      <div style="color:#ffd700;font-size:11px;">HINT: Decode with ROT13 to obtain the next URL.</div>
+      <div style="color:#ffd700;font-size:11px;">Visit: rot13.com or dcode.fr/rot-13-cipher</div>
+    </div>
+    <button onclick="document.getElementById('secret-panel').classList.remove('show')">[ CLOSE TERMINAL ]</button>
+  </div>
+
+  <div id="winscreen">
+    <h1>YOU WIN? NO.</h1>
+    <p style="color:#a090d0">This was a trick floor.<br>The real puzzle was never the game.</p>
+  </div>
+
+  <script>
+    // ── Canvas & context ─────────────────────────────────────────────────────────
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const CW = canvas.width, CH = canvas.height;
+
+    // ── Palette ──────────────────────────────────────────────────────────────────
+    const PAL = {
+      sky: '#0d0820', ground: '#1a0d30', plat: '#2a1550',
+      platHL: '#4a2590', player: '#c060ff', scythe: '#80c0ff',
+      boss: '#ff2040', bossHL: '#ff6080', bullet: '#ff8040',
+      pbullet: '#a0ffff', star: '#ffffff', ui: '#a090d0',
+      danger: '#ff2d55', safe: '#39ff14',
+    };
+
+    // ── Game state ────────────────────────────────────────────────────────────────
+    let state = 'playing'; // 'playing' | 'dead' | 'win'
+    let hp = 100, souls = 0, level = 1, frame = 0;
+
+    // ── Input ─────────────────────────────────────────────────────────────────────
+    const keys = {};
+    document.addEventListener('keydown', e => { keys[e.code] = true; handleKonami(e.code); });
+    document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    // ── Konami code tracker ───────────────────────────────────────────────────────
+    const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown',
+      'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'KeyB', 'KeyA'];
+    let konamiIdx = 0;
+    function handleKonami(code) {
+      if (code === KONAMI[konamiIdx]) {
+        konamiIdx++;
+        if (konamiIdx === KONAMI.length) {
+          konamiIdx = 0;
+          if (state === 'dead') unlockSecret();
+        }
+      } else {
+        konamiIdx = (code === KONAMI[0]) ? 1 : 0;
+      }
+    }
+    function unlockSecret() {
+      document.getElementById('gameover').classList.remove('show');
+      document.getElementById('secret-panel').classList.add('show');
+    }
+
+    // ── Player ────────────────────────────────────────────────────────────────────
+    const P = {
+      x: 80, y: 360, w: 28, h: 40, vx: 0, vy: 0, onGround: false,
+      shootCd: 0, invFrames: 0, scytheAngle: 0
+    };
+
+    // ── Platforms ─────────────────────────────────────────────────────────────────
+    const platforms = [
+      { x: 0, y: 460, w: CW, h: 60 },   // ground
+      { x: 100, y: 370, w: 120, h: 14 },
+      { x: 300, y: 300, w: 100, h: 14 },
+      { x: 480, y: 340, w: 120, h: 14 },
+      { x: 620, y: 270, w: 130, h: 14 },
+      { x: 200, y: 220, w: 100, h: 14 },
+      { x: 400, y: 180, w: 80, h: 14 },
+    ];
+
+    // ── Boss ──────────────────────────────────────────────────────────────────────
+    const BOSS = {
+      x: 600, y: 200, w: 80, h: 100, hp: 999, maxHp: 999,
+      vx: -1.2, phase: 0, shootCd: 0, reflected: 0
+    };
+
+    // ── Bullets ───────────────────────────────────────────────────────────────────
+    let playerBullets = [], bossBullets = [], particles = [];
+
+    // ── Stars (background) ───────────────────────────────────────────────────────
+    const stars = Array.from({ length: 120 }, () => ({
+      x: Math.random() * CW, y: Math.random() * CH * 0.7,
+      r: Math.random() * 1.5 + 0.3, twinkle: Math.random() * Math.PI * 2
+    }));
+
+    // ── Souls (collectibles) ──────────────────────────────────────────────────────
+    let soulOrbs = [
+      { x: 160, y: 340 }, { x: 340, y: 270 }, { x: 520, y: 310 },
+      { x: 650, y: 240 }, { x: 250, y: 190 }, { x: 430, y: 150 }
+    ];
+
+    // ── Utility ───────────────────────────────────────────────────────────────────
+    function rect(x, y, w, h, col, radius = 4) {
+      ctx.fillStyle = col;
+      if (radius) {
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, [radius]);
+        ctx.fill();
+      } else { ctx.fillRect(x, y, w, h); }
+    }
+    function collide(a, b) {
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+    function spawnParticle(x, y, col, n = 6) {
+      for (let i = 0; i < n; i++) {
+        particles.push({
+          x, y, vx: (Math.random() - 0.5) * 4, vy: (Math.random() - 0.5) * 4 - 2,
+          life: 40, col, r: Math.random() * 4 + 2
+        });
+      }
+    }
+
+    // ── Game loop ─────────────────────────────────────────────────────────────────
+    function update() {
+      if (state !== 'playing') return;
+      frame++;
+
+      // Player move
+      const spd = 3.5;
+      P.vx = 0;
+      if (keys['ArrowLeft'] || keys['KeyA']) P.vx = -spd;
+      if (keys['ArrowRight'] || keys['KeyD']) P.vx = spd;
+      if ((keys['ArrowUp'] || keys['KeyW'] || keys['Space']) && P.onGround) {
+        P.vy = -12; P.onGround = false;
+      }
+      P.vy = Math.min(P.vy + 0.55, 18);
+      P.x += P.vx; P.y += P.vy;
+      P.scytheAngle += 0.05;
+      if (P.invFrames > 0) P.invFrames--;
+
+      // Platform collision
+      P.onGround = false;
+      for (const pl of platforms) {
+        if (P.x + P.w > pl.x && P.x < pl.x + pl.w &&
+          P.y + P.h > pl.y && P.y + P.h < pl.y + pl.h + 12 && P.vy >= 0) {
+          P.y = pl.y - P.h; P.vy = 0; P.onGround = true;
+        }
+      }
+      P.x = Math.max(0, Math.min(CW - P.w, P.x));
+      if (P.y > CH) { takeDamage(30); P.x = 80; P.y = 360; P.vy = 0; }
+
+      // Player shoot
+      if (P.shootCd > 0) P.shootCd--;
+      if ((keys['KeyZ'] || keys['KeyJ']) && P.shootCd === 0) {
+        playerBullets.push({ x: P.x + P.w, y: P.y + P.h / 2 - 3, w: 12, h: 6, vx: 9, col: PAL.pbullet });
+        P.shootCd = 14;
+        spawnParticle(P.x + P.w, P.y + P.h / 2, PAL.pbullet, 3);
+      }
+
+      // Boss AI
+      BOSS.x += BOSS.vx;
+      if (BOSS.x < 400 || BOSS.x > CW - BOSS.w - 20) BOSS.vx *= -1;
+      BOSS.phase = (frame % 300 < 150) ? 0 : 1;
+      BOSS.shootCd--;
+      if (BOSS.shootCd <= 0) {
+        const spd2 = BOSS.phase === 0 ? 4 : 6;
+        const dx = P.x - BOSS.x, dy = P.y - BOSS.y;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        bossBullets.push({
+          x: BOSS.x + BOSS.w / 2, y: BOSS.y + BOSS.h / 2,
+          w: 14, h: 14, vx: (dx / len) * spd2, vy: (dy / len) * spd2, col: PAL.bullet, reflected: false
+        });
+        BOSS.shootCd = BOSS.phase === 0 ? 60 : 35;
+      }
+
+      // Player bullets
+      playerBullets = playerBullets.filter(b => {
+        b.x += b.vx;
+        // Boss reflects ALL player bullets
+        if (collide(b, BOSS)) {
+          BOSS.reflected++;
+          spawnParticle(b.x, b.y, PAL.bullet, 8);
+          bossBullets.push({
+            x: b.x, y: b.y, w: 14, h: 14,
+            vx: -(b.vx) * 0.8, vy: (Math.random() - 0.5) * 3, col: '#ff8040', reflected: true
+          });
+          return false;
+        }
+        return b.x < CW + 20;
+      });
+
+      // Boss bullets (including reflected ones)
+      bossBullets = bossBullets.filter(b => {
+        b.x += b.vx; b.y += b.vy;
+        if (collide(b, { x: P.x, y: P.y, w: P.w, h: P.h }) && P.invFrames === 0) {
+          takeDamage(b.reflected ? 20 : 12);
+          spawnParticle(P.x + P.w / 2, P.y + P.h / 2, b.col, 10);
+          return false;
+        }
+        return b.x > -20 && b.x < CW + 20 && b.y > -20 && b.y < CH + 20;
+      });
+
+      // Soul collection
+      soulOrbs = soulOrbs.filter(s => {
+        const dist = Math.hypot(P.x + P.w / 2 - s.x, P.y + P.h / 2 - s.y);
+        if (dist < 24) { souls++; spawnParticle(s.x, s.y, '#ffd700', 12); return false; }
+        return true;
+      });
+
+      // Particles
+      particles = particles.filter(p => {
+        p.x += p.vx; p.y += p.vy; p.life--; p.vy += 0.15;
+        return p.life > 0;
+      });
+
+      // HUD update
+      document.getElementById('hp-display').textContent = `❤ HP: ${hp}`;
+      document.getElementById('score-display').textContent = `SOULS: ${souls}`;
+    }
+
+    function takeDamage(dmg) {
+      if (P.invFrames > 0) return;
+      hp -= dmg;
+      P.invFrames = 60;
+      if (hp <= 0) { hp = 0; die(); }
+    }
+
+    function die() {
+      state = 'dead';
+      setTimeout(() => {
+        document.getElementById('gameover').classList.add('show');
+      }, 800);
+    }
+
+    function restartGame() {
+      hp = 100; souls = 0; frame = 0; state = 'playing';
+      P.x = 80; P.y = 360; P.vx = 0; P.vy = 0; P.invFrames = 0;
+      playerBullets = []; bossBullets = []; particles = [];
+      BOSS.x = 600; BOSS.vx = -1.2;
+      soulOrbs = [{ x: 160, y: 340 }, { x: 340, y: 270 }, { x: 520, y: 310 },
+      { x: 650, y: 240 }, { x: 250, y: 190 }, { x: 430, y: 150 }];
+      konamiIdx = 0;
+      document.getElementById('gameover').classList.remove('show');
+    }
+
+    // ── Draw ──────────────────────────────────────────────────────────────────────
+    function draw() {
+      // Sky
+      const grad = ctx.createLinearGradient(0, 0, 0, CH);
+      grad.addColorStop(0, '#06030f'); grad.addColorStop(1, '#12082a');
+      ctx.fillStyle = grad; ctx.fillRect(0, 0, CW, CH);
+
+      // Stars
+      stars.forEach(s => {
+        s.twinkle += 0.04;
+        const a = 0.4 + 0.6 * Math.abs(Math.sin(s.twinkle));
+        ctx.globalAlpha = a;
+        ctx.fillStyle = PAL.star;
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+
+      // Torii gate (decorative background)
+      ctx.fillStyle = '#2a0a0a';
+      ctx.fillRect(340, 80, 16, 360);
+      ctx.fillRect(244, 80, 16, 360);
+      ctx.fillRect(220, 80, 400, 20);
+      ctx.fillRect(230, 108, 380, 14);
+      ctx.fillStyle = '#3d0f0f';
+      ctx.fillRect(220, 80, 400, 20);
+
+      // Platforms
+      for (const pl of platforms) {
+        rect(pl.x, pl.y, pl.w, pl.h, PAL.plat);
+        rect(pl.x, pl.y, pl.w, 4, PAL.platHL);
+      }
+
+      // Soul orbs
+      soulOrbs.forEach(s => {
+        const pulse = Math.sin(frame * 0.08 + s.x) * 3;
+        ctx.shadowBlur = 12; ctx.shadowColor = '#ffd700';
+        ctx.fillStyle = '#ffd700';
+        ctx.beginPath(); ctx.arc(s.x, s.y + pulse, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+
+      // Boss
+      const blink = Math.sin(frame * 0.3) > 0;
+      ctx.shadowBlur = 20; ctx.shadowColor = PAL.boss;
+      rect(BOSS.x, BOSS.y, BOSS.w, BOSS.h, blink ? PAL.bossHL : PAL.boss, 8);
+      // Boss eye
+      ctx.fillStyle = '#fff'; ctx.beginPath();
+      ctx.arc(BOSS.x + 25, BOSS.y + 30, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.arc(BOSS.x + 55, BOSS.y + 30, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#000'; ctx.beginPath();
+      ctx.arc(BOSS.x + 28, BOSS.y + 32, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.arc(BOSS.x + 58, BOSS.y + 32, 5, 0, Math.PI * 2); ctx.fill();
+      // "REFLECTS ALL" badge
+      ctx.font = 'bold 10px Courier New'; ctx.fillStyle = '#ffd700';
+      ctx.textAlign = 'center';
+      ctx.fillText('REFLECTS ALL', BOSS.x + BOSS.w / 2, BOSS.y - 8);
+      ctx.shadowBlur = 0;
+
+      // Boss HP bar
+      const bpct = BOSS.hp / BOSS.maxHp;
+      rect(CW / 2 - 150, 16, 300, 10, '#2a1540', 3);
+      rect(CW / 2 - 150, 16, 300 * bpct, 10, '#ff2040', 3);
+      ctx.font = '10px Courier New'; ctx.fillStyle = '#ff8080'; ctx.textAlign = 'center';
+      ctx.fillText('AKUMA-03  [IMMUNE]', CW / 2, 42);
+
+      // Player
+      ctx.globalAlpha = P.invFrames > 0 && Math.floor(P.invFrames / 4) % 2 === 0 ? 0.4 : 1;
+      ctx.shadowBlur = 16; ctx.shadowColor = PAL.player;
+      rect(P.x, P.y, P.w, P.h, PAL.player, 6);
+      // Scythe
+      ctx.save();
+      ctx.translate(P.x + P.w, P.y + P.h / 2);
+      ctx.rotate(P.scytheAngle);
+      rect(-4, -24, 8, 24, PAL.scythe, 2);
+      ctx.restore();
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+
+      // Player bullets
+      playerBullets.forEach(b => {
+        ctx.shadowBlur = 8; ctx.shadowColor = PAL.pbullet;
+        rect(b.x, b.y, b.w, b.h, b.col, 3);
+        ctx.shadowBlur = 0;
+      });
+
+      // Boss bullets
+      bossBullets.forEach(b => {
+        ctx.shadowBlur = 10; ctx.shadowColor = b.col;
+        ctx.fillStyle = b.col;
+        ctx.beginPath(); ctx.arc(b.x, b.y, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+
+      // Particles
+      particles.forEach(p => {
+        ctx.globalAlpha = p.life / 40;
+        ctx.shadowBlur = 4; ctx.shadowColor = p.col;
+        ctx.fillStyle = p.col;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+      });
+      ctx.globalAlpha = 1;
+
+      // Controls hint
+      ctx.font = '11px Courier New'; ctx.fillStyle = '#3a2060'; ctx.textAlign = 'left';
+      ctx.fillText('← → MOVE  |  W/SPACE JUMP  |  Z SHOOT', 12, CH - 12);
+      ctx.textAlign = 'right';
+      ctx.fillText('The boss is unbeatable. Look deeper.', CW - 12, CH - 12);
+
+      // Death overlay
+      if (state === 'dead') {
+        ctx.fillStyle = 'rgba(10,3,20,0.7)';
+        ctx.fillRect(0, 0, CW, CH);
+        ctx.font = 'bold 36px Courier New'; ctx.fillStyle = PAL.danger;
+        ctx.textAlign = 'center';
+        ctx.fillText('魂  GAME OVER  魂', CW / 2, CH / 2);
+      }
+    }
+
+    function loop() {
+      update();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    loop();
+  </script>
+</body>
+
+</html>
